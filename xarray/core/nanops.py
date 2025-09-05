@@ -26,17 +26,25 @@ def _maybe_null_out(result, axis, mask, min_count=1):
     """
     xarray version of pandas.core.nanops._maybe_null_out
     """
-    if hasattr(axis, "__len__"):  # if tuple or list
-        raise ValueError(
-            "min_count is not available for reduction with more than one dimensions."
-        )
-
-    if axis is not None and getattr(result, "ndim", False):
-        null_mask = (mask.shape[axis] - mask.sum(axis) - min_count) < 0
+    if axis is not None and hasattr(result, "ndim"):
+        # Handle both single axis and multiple axes cases
+        if hasattr(axis, "__len__"):  # if tuple or list (multiple axes)
+            # Convert to tuple if it's a list (numpy requires tuple for multiple axes)
+            axis = tuple(axis) if isinstance(axis, list) else axis
+            # Calculate total number of elements across the specified axes
+            axis_size = np.take(mask.shape, axis).prod()
+        else:  # single axis
+            axis_size = mask.shape[axis]
+        
+        null_mask = (axis_size - mask.sum(axis) - min_count) < 0
         if null_mask.any():
             dtype, fill_value = dtypes.maybe_promote(result.dtype)
-            result = result.astype(dtype)
-            result[null_mask] = fill_value
+            if result.ndim == 0:  # scalar result
+                if null_mask:
+                    result = fill_value
+            else:  # array result
+                result = result.astype(dtype)
+                result[null_mask] = fill_value
 
     elif getattr(result, "dtype", None) not in dtypes.NAT_TYPES:
         null_mask = mask.size - mask.sum()

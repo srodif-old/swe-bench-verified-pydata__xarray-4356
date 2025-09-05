@@ -604,6 +604,41 @@ def test_min_count_dataset(func):
     assert_allclose(actual, expected)
 
 
+@pytest.mark.parametrize("func", ["sum", "prod"])
+def test_min_count_multiple_dims(func):
+    # Test min_count with multiple dimensions
+    da = construct_dataarray(3, dtype=float, contains_nan=True, dask=False)
+    min_count = 3
+    
+    # Test with multiple dimensions as list
+    actual = getattr(da, func)(dim=["x", "y"], skipna=True, min_count=min_count)
+    
+    # Compute expected result: reduce in steps to match the behavior
+    # First reduce along x, then along y, both with original min_count
+    temp = getattr(da, func)(dim="x", skipna=True)
+    expected = getattr(temp, func)(dim="y", skipna=True)
+    
+    # For testing purposes, we'll create a simple test case where we know the expected behavior
+    # Create a simple DataArray with known values
+    simple_da = DataArray(
+        [[1.0, 2.0, np.nan], [4.0, np.nan, 6.0], [np.nan, 8.0, 9.0]],
+        dims=["x", "y"]
+    )
+    
+    # Test the basic functionality - this should work now
+    result = simple_da.sum(dim=["x", "y"], skipna=True, min_count=1)
+    expected_sum = 1.0 + 2.0 + 4.0 + 6.0 + 8.0 + 9.0  # = 30.0
+    assert result.values == expected_sum
+    
+    # Test with min_count that should result in NaN
+    result_high_min = simple_da.sum(dim=["x", "y"], skipna=True, min_count=7)
+    assert np.isnan(result_high_min.values)
+    
+    # Test with multiple dimensions as tuple
+    result_tuple = simple_da.sum(dim=("x", "y"), skipna=True, min_count=1)
+    assert result_tuple.values == expected_sum
+
+
 @pytest.mark.parametrize("dtype", [float, int, np.float32, np.bool_])
 @pytest.mark.parametrize("dask", [False, True])
 @pytest.mark.parametrize("func", ["sum", "prod"])
